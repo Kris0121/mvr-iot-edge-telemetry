@@ -1,11 +1,14 @@
 # Dependencias de Node
-node_modules/
-npm-debug.log
+backend/node_modules/
+backend/npm-debug.log
 
 # Entornos virtuales de Python
-venv/
-__pycache__/
+backend/venv/
+backend/__pycache__/
 
 # Archivos de SO
 .DS_Store
 Thumbs.db
+
+# Arhivo de Datos .env
+.env
