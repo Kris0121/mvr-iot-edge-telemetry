@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:5.7
+    container_name: asir_TFG_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  backend:
+    image: node:14-alpine 
+    container_name: asir_TFG_backend
+    working_dir: /app
+    volumes:
+      - ./backend:/app 
+    ports:
+      - "${BACKEND_PORT}"
+    command: sh -c "npm install && npm start"
+    links:
+      - db
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: asir_pma
+    links:
+      - db
+    environment:
+      PMA_HOST: db
+    ports:
+      - "${GUI_PORT}"
+
+volumes:
+  db_data:

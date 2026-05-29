@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MVR — Monitor de Volumen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500&display=swap"
+      rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <div>
+          <div class="header-title">MVR</div>
+          <div class="header-sub"><span class="live-dot"></span>Monitor de Volumen · Dashboard</div>
+        </div>
+        <div class="header-controls">
+          <select id="containerSelect">
+            <option value="A1" selected>Contenedor A1</option>
+            <option value="A2">Contenedor A2</option>
+            <option value="B1">Contenedor B1</option>
+            <option value="TEST_FINAL_DIEGO">TEST DIEGO</option>
+          </select>
+          <button id="toggleModeBtn" class="btn btn-mode">MODO: <span id="modeText">MOCK</span></button>
+        </div>
+      </header>
+
+      <div class="grid">
+        <div class="card card-main">
+          <div class="card-top">
+            <div>
+              <div class="label">Contenedor</div>
+              <div class="container-id" id="containerId">A1</div>
+            </div>
+            <div class="status-badge status-ok" id="statusBadge">OK</div>
+          </div>
+
+          <div class="level-section">
+            <div class="label">Nivel de llenado</div>
+            <div class="level-value level-ok" id="levelValue">--%</div>
+          </div>
+
+          <div class="progress-track">
+            <div class="progress-fill fill-ok" id="progressBar" style="width:0%"></div>
+          </div>
+
+          <div class="meta-row">
+            <div>
+              <div class="label">Última act.</div>
+              <div class="meta-val" id="lastUpdated">—</div>
+            </div>
+            <div>
+              <div class="label">Distancia</div>
+              <div class="meta-val" id="distanceVal">— cm</div>
+            </div>
+            <div>
+              <div class="label">Batería</div>
+              <div class="meta-val" id="batteryVal">— V</div>
+            </div>
+          </div>
+
+          <div class="alert-conn" id="connectionAlert">
+            ⚠ Sin conexión — Mostrando datos simulados.
+          </div>
+
+          <div class="btn-row">
+            <button id="btnOk" class="btn btn-ok">Forzar OK</button>
+            <button id="btnWarn" class="btn btn-warn">Forzar WARN</button>
+            <button id="btnCrit" class="btn btn-crit">Forzar CRIT</button>
+          </div>
+        </div>
+
+        <div class="card card-history">
+          <h2>Histórico</h2>
+          <div class="hist-count">Últimas lecturas</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Nivel</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr>
+                <td colspan="3" style="color:var(--muted)">—</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="legend">OK (0–69%) · WARNING (70–89%) · CRITICAL (90–100%)</div>
+        </div>
+      </div>
+      <footer>
+        <div>API: <span id="apiInfo">localhost:3000</span></div>
+        <div>Modo: <span id="footerMode">MOCK</span></div>
+      </footer>
+    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // CONFIGURACIÓN API
+        const API_BASE = ""; // Vacío = usa el mismo dominio donde está la web
+        let MODE = "LIVE"; // Empezamos buscando datos reales
+        let currentContainer = "A1";
+
+        // REFERENCIAS DOM
+        const el = id => document.getElementById(id);
+        const els = {
+          containerSelect: el("containerSelect"),
+          toggleModeBtn: el("toggleModeBtn"),
+          modeText: el("modeText"),
+          footerMode: el("footerMode"),
+          containerId: el("containerId"),
+          levelValue: el("levelValue"),
+          statusBadge: el("statusBadge"),
+          progressBar: el("progressBar"),
+          lastUpdated: el("lastUpdated"),
+          distanceVal: el("distanceVal"),
+          batteryVal: el("batteryVal"),
+          historyBody: el("historyBody"),
+          connectionAlert: el("connectionAlert"),
+          apiInfo: el("apiInfo"),
+          btnOk: el("btnOk"),
+          btnWarn: el("btnWarn"),
+          btnCrit: el("btnCrit"),
+        };
+
+        if (els.apiInfo) els.apiInfo.textContent = window.location.host;
+
+        // FUNCIONES AUXILIARES
+        function calcStatus(pct) {
+          if (pct >= 90) return "CRITICAL";
+          if (pct >= 70) return "WARNING";
+          return "OK";
+        }
+
+        function fmtTime(iso) {
+          try {
+            if (!iso) return "—";
+            return new Date(iso).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          } catch { return "—"; }
+        }
+
+        function applyStatus(status) {
+          els.statusBadge.textContent = status;
+          els.statusBadge.className = "status-badge " + (status === "OK" ? "status-ok" : status === "WARNING" ? "status-warn" : "status-crit");
+
+          const lvlClass = status === "OK" ? "level-ok" : status === "WARNING" ? "level-warn" : "level-crit";
+          els.levelValue.className = "level-value " + lvlClass;
+
+          const fillClass = status === "OK" ? "fill-ok" : status === "WARNING" ? "fill-warn" : "fill-crit";
+          els.progressBar.className = "progress-fill " + fillClass;
+
+          const card = document.querySelector(".card-main");
+          if (card) {
+            card.style.setProperty("--accent", status === "OK" ? "#22c55e" : status === "WARNING" ? "#f59e0b" : "#ef4444");
+          }
+        }
+
+        // PINTAR DASHBOARD
+        function setMainCard(data) {
+          const lvl = Math.round(Number(data.level_pct ?? 0));
+          const status = calcStatus(lvl);
+
+          els.containerId.textContent = data.container_id ?? currentContainer;
+          els.levelValue.textContent = `${lvl}%`;
+          els.progressBar.style.width = `${Math.max(0, Math.min(100, lvl))}%`;
+
+          applyStatus(status);
+
+          els.lastUpdated.textContent = fmtTime(data.updated_at);
+          els.distanceVal.textContent = data.distance_cm != null ? `${data.distance_cm} cm` : "— cm";
+          els.batteryVal.textContent = "12.0 V"; // Dato fijo por ahora
+        }
+
+        function setHistory(rows) {
+          const list = Array.isArray(rows) ? rows.slice(0, 10) : [];
+          if (!list.length) {
+            els.historyBody.innerHTML = `<tr><td colspan="3" style="color:var(--muted)">Sin datos aún</td></tr>`;
+            return;
+          }
+          els.historyBody.innerHTML = list.map((r, i) => {
+            // TRADUCTOR: BBDD (español) -> Web (inglés)
+            const lvl = Math.round(Number(r.llenado_porcentaje ?? r.level_pct ?? 0));
+            const fecha = r.fecha ?? r.updated_at;
+            const status = calcStatus(lvl);
+            const cls = status === "OK" ? "hist-ok" : status === "WARNING" ? "hist-warn" : "hist-crit";
+
+            return `
+          <tr style="animation-delay:${i * 40}ms">
+            <td>${fmtTime(fecha)}</td>
+            <td class="td-level">${lvl}%</td>
+            <td><span class="hist-badge ${cls}">${status}</span></td>
+          </tr>`;
+          }).join("");
+        }
+
+        // --- COMUNICACIÓN CON TU SERVIDOR ---
+        async function fetchLatest() {
+          const r = await fetch(`${API_BASE}/api/estado-actual`);
+          if (!r.ok) throw new Error("Error en /api/estado-actual");
+          const todos = await r.json();
+
+          // Si seleccionas "TEST DIEGO" en el menú, buscará ese ID. Si no, usa el A1 por defecto.
+          const sensor = todos.find(s => s.sensor_id == currentContainer) || todos[0];
+          if (!sensor) throw new Error("Sin datos");
+
+          // TRADUCCIÓN BBDD -> WEB
+          return {
+            container_id: sensor.sensor_id,
+            level_pct: sensor.llenado_porcentaje,
+            distance_cm: sensor.distancia_cm,
+            updated_at: sensor.fecha
+          };
+        }
+
+        async function fetchHistory() {
+          const r = await fetch(`${API_BASE}/api/historial`);
+          const data = await r.json();
+          // Mostramos todos o filtramos por el seleccionado
+          return data.filter(d => d.sensor_id == currentContainer || currentContainer == "TEST_FINAL_DIEGO");
+        }
+
+        // DATOS FALSOS (Por si falla la conexión)
+        function mockLatest(val) {
+          const lvl = val !== null ? val : Math.floor(Math.random() * 100);
+          return { container_id: currentContainer, level_pct: lvl, distance_cm: 120, updated_at: new Date().toISOString() };
+        }
+        function mockHistory() { return []; }
+
+        // ACTUALIZAR PANTALLA
+        async function refresh(forcedLevel = null) {
+          try {
+            if (MODE === "LIVE") {
+              const [latest, history] = await Promise.all([fetchLatest(), fetchHistory()]);
+              els.connectionAlert.classList.remove("show");
+              setMainCard(latest);
+              setHistory(history);
+            } else {
+              els.connectionAlert.classList.remove("show");
+              setMainCard(mockLatest(forcedLevel));
+              setHistory(mockHistory());
+            }
+          } catch (e) {
+            console.log("Esperando datos...", e);
+            els.connectionAlert.classList.add("show");
+            // Si falla, no borramos la pantalla, dejamos lo último o mostramos alerta
+          }
+        }
+
+        // EVENTOS
+        els.containerSelect.addEventListener("change", () => {
+          currentContainer = els.containerSelect.value;
+          refresh();
+        });
+
+        els.toggleModeBtn.addEventListener("click", () => {
+          MODE = MODE === "MOCK" ? "LIVE" : "MOCK";
+          els.modeText.textContent = MODE;
+          els.footerMode.textContent = MODE;
+          els.toggleModeBtn.classList.toggle("active", MODE === "LIVE");
+          refresh();
+        });
+
+        // Botones de prueba manual
+        els.btnOk.addEventListener("click", () => { MODE = "MOCK"; refresh(50); });
+        els.btnWarn.addEventListener("click", () => { MODE = "MOCK"; refresh(80); });
+        els.btnCrit.addEventListener("click", () => { MODE = "MOCK"; refresh(95); });
+
+        // INICIO
+        els.modeText.textContent = MODE;
+        if (MODE === "LIVE") els.toggleModeBtn.classList.add("active");
+        refresh();
+        setInterval(refresh, 2000);
+      });
+    </script>
+  </body>
+</html>

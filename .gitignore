@@ -1,0 +1,11 @@
+# Dependencias de Node
+node_modules/
+npm-debug.log
+
+# Entornos virtuales de Python
+venv/
+__pycache__/
+
+# Archivos de SO
+.DS_Store
+Thumbs.db
